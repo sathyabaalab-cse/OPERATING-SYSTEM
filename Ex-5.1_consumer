@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#define KEY_NUM 5678
+
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+};
+
+void sem_wait_sys(int semid, int sem_num) {
+    struct sembuf sb = {sem_num, -1, 0};
+    semop(semid, &sb, 1);
+}
+
+void sem_post_sys(int semid, int sem_num) {
+    struct sembuf sb = {sem_num, 1, 0};
+    semop(semid, &sb, 1);
+}
+
+int main() {
+    // 1. Access Shared Memory
+    int shmid = shmget((key_t)KEY_NUM, sizeof(int), 0666);
+    if (shmid < 0) { perror("shmget failed (Is Producer running?)"); exit(1); }
+
+    int *shared_data = (int *)shmat(shmid, NULL, 0);
+    if (shared_data == (void *)-1) { perror("shmat failed"); exit(1); }
+
+    // 2. Access existing Semaphore Set using semget
+    int semid = semget((key_t)KEY_NUM, 2, 0666);
+    if (semid < 0) { perror("semget failed"); exit(1); }
+
+    printf("Consumer Process Started. Monitoring changes...\n");
+
+    while (1) {
+        // Wait for data from Producer (Semaphore 1)
+        sem_wait_sys(semid, 1);
+
+        // Check for termination criteria
+        if (*shared_data == -1) {
+            break;
+        }
+
+        // Process data
+        int num = *shared_data;
+        int square = num * num;
+        printf("[Consumer] Received: %d | Squared result: %d\n", num, square);
+
+        // OPTIONAL: Read state of both semaphores using GETALL before waking producer
+        unsigned short current_states[2];
+        union semun arg;
+        arg.array = current_states;
+        if (semctl(semid, 0, GETALL, arg) >= 0) {
+            printf("[System Log] Pre-signal Sem States -> [Prod: %d, Cons: %d]\n",
+                   current_states[0], current_states[1]);
+        }
+
+        // Wake up Producer (Semaphore 0)
+        sem_post_sys(semid, 0);
+    }
+
+    // 3. Clear kernel allocation configurations
+    shmdt(shared_data);
+    shmctl(shmid, IPC_RMID, NULL); // Destroy shared memory
+    semctl(semid, 0, IPC_RMID);     // Destroy semaphore set
+
+    printf("[Consumer] Shared structures removed from OS. Exiting gracefully.\n");
+    return 0;
+}
