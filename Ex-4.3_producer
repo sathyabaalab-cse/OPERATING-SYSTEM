@@ -1,0 +1,52 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+struct Student
+{
+    char name[50];
+    int rollno;
+    int marks[5];
+};
+struct message
+{
+    long msg_type;
+    struct Student student;
+};
+int main()
+{
+    key_t key;
+    int msgid;
+    struct message msg;
+    int i;
+    key = ftok("gradefile2", 65);
+    if (key == -1)
+    {
+        perror("Error in ftok\n");
+        exit(1);
+    }
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    if (msgid == -1)
+    {
+        perror("Error in msgget\n");
+        exit(1);
+    }
+    msg.msg_type = 1;
+    printf("Enter student name: ");
+    scanf(" %[^\n]", msg.student.name);
+    printf("Enter roll number: ");
+    scanf("%d", &msg.student.rollno);
+    printf("Enter marks for 5 subjects:\n");
+    for (i = 0; i < 5; i++)
+    {
+        printf("Subject %d: ", i + 1);
+        scanf("%d", &msg.student.marks[i]);
+    }
+    if (msgsnd(msgid, &msg, sizeof(msg.student), 0) == -1)
+    {
+        perror("Error in msgsnd\n");
+        exit(1);
+    }
+    printf("\nProducer sent student details successfully.\n");
+    return 0;
+}
