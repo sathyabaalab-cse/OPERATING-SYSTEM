@@ -1,0 +1,36 @@
+#include<stdio.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/wait.h>
+int main()
+{
+   pid_t p2,p3;
+   printf("P1 :PID=%d\n",getpid());
+   p2=fork();
+   if (p2<0)
+   {
+      perror("fork failed\n");
+   }
+   else if(p2==0)
+   {
+      printf("P2 :PID=%d,Parent PID=%d\n",getpid(),getppid());
+      p3=fork();
+      if(p3<0)
+      {
+	 perror("Fork failed\n");
+      }
+      else if(p3==0)
+      {
+	 printf("P3 :PID=%d,ParentID=%d\n",getpid(),getppid());
+      }
+      else
+      {
+	 wait(NULL);
+      }
+   }
+   else
+   {
+      wait(NULL);
+   }
+   return 0;
+}
