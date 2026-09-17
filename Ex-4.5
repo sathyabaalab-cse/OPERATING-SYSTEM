@@ -1,0 +1,88 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <string.h>
+struct message
+{
+    long msg_type;
+    char msg_text[100];
+};
+int main()
+{
+    key_t key;
+    int msgid;
+    struct message msg;
+    pid_t pid;
+    int i;
+    int count = 0;
+    int in_word=0;
+    key = ftok("msgfile", 65);
+    if (key == -1) {
+        perror("ftok failed (Make sure 'msgfile' exists)");
+        exit(1);
+    }
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    if (msgid == -1) {
+        perror("message get failed to create queue");
+        exit(1);
+    }
+    msg.msg_type = 1;
+    printf("--- Input Section ---\n");
+    printf("Enter a message: ");
+    fgets(msg.msg_text, 100, stdin);
+    pid = fork();
+
+    if (pid < 0) {
+        perror("fork failed");
+        exit(1);
+    }
+    else if (pid == 0) {
+        if (msgrcv(msgid, &msg, sizeof(msg.msg_text), 1, 0) == -1) {
+            perror("msgrcv failed to receive message");
+            exit(1);
+        }
+
+        printf("\n--- Child (Consumer) Context ---\n");
+        printf("Consumer received: %s", msg.msg_text);
+        for (i = 0; msg.msg_text[i] != '\0'; i++)
+        {
+            if (msg.msg_text[i] != ' ' &&
+                msg.msg_text[i] != '\n' &&
+                msg.msg_text[i] != '\t')
+            {
+                if (in_word == 0)
+                {
+                    count++;
+                    in_word = 1;
+                }
+            }
+            else
+            {
+                in_word = 0;
+            }
+        }
+
+        printf("Number of words: %d\n", count);
+        exit(0);
+    }
+    else {
+        if (msgsnd(msgid, &msg, sizeof(msg.msg_text), 0) == -1) {
+            perror("msgsnd failed to send message");
+            exit(1);
+        }
+        printf("Producer sent the message safely.\n");
+        wait(NULL);
+        if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+            perror("msgctl RMID failed");
+        }
+
+        printf("\nParent cleaned up Message Queue. Exiting...\n");
+    }
+
+    return 0;
+}
+
