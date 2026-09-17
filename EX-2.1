@@ -1,0 +1,44 @@
+#include<stdio.h>
+#include<unistd.h>
+#include<string.h>
+#include<stdlib.h>
+#include<sys/wait.h>
+#include<sys/types.h>
+int main()
+{
+   int fd[2];
+   char wm[20],rm[20];
+   pipe(fd);
+   if(fork()==0)
+   {
+      close(fd[0]);
+      printf("PID=%d,PPID=%d\n",getpid(),getppid());
+      printf("Enter a number\n");
+      scanf("%s",wm);
+      write(fd[1],wm,strlen(wm)+1);
+      close(fd[1]);
+   }
+   else
+   {
+      close(fd[1]);
+      printf("PID=%d\n",getpid());
+      read(fd[0],rm,sizeof(rm));
+      int n=atoi(rm);
+      int temp=n;
+      while(temp>1 && temp%3==0)
+      {
+	 temp=temp/3;
+      }
+      if(temp==1 && n>0)
+      {
+	 printf("%d is power of 3\n",n);
+      }
+      else
+      {
+	 printf("%d is Not a power of 3\n",n);
+      }
+      close(fd[0]);
+      wait(NULL);
+   }
+   return 0;
+}
